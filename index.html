@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>COVID-19 Death Waves in the United States</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        #subtitle {
+            font-size: 15px;
+            color: #555;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 700px;
+        }
+        #chart-container {
+            position: relative;
+        }
+        .line {
+            fill: none;
+            stroke: #2c7bb6;
+            stroke-width: 2.5px;
+        }
+        .highlight-rect {
+            opacity: 0.15;
+        }
+        .axis-label {
+            font-size: 13px;
+            fill: #333;
+        }
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            align-items: center;
+        }
+        button {
+            padding: 8px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #2c7bb6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:disabled {
+            background: #aaa;
+            cursor: default;
+        }
+        #scene-counter {
+            font-size: 14px;
+            color: #555;
+        }
+        .tooltip {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.15);
+        }
+        .annotation-note-label {
+            font-size: 13px;
+        }
+        .annotation-note-title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>COVID-19 Death Waves in the United States</h1>
+<div id="subtitle"></div>
+<div id="chart-container">
+    <div class="tooltip" id="tooltip"></div>
+</div>
+<div class="nav-buttons">
+    <button id="prev-btn" disabled>Previous</button>
+    <span id="scene-counter">Scene 1 of 3</span>
+    <button id="next-btn">Next</button>
+</div>
+
+<script>
+
+let currentScene = 1;
+const totalScenes = 3;
+
+const width = 750;
+const height = 450;
+const margin = { top: 60, right: 40, bottom: 60, left: 80 };
+const innerWidth = width - margin.left - margin.right;
+const innerHeight = height - margin.top - margin.bottom;
+
+const scenes = [
+    {
+        title: "Slide 1: The Initial Wave (April - May 2020)",
+        subtitle: "The COVID-19 pandemic initially surged in Spring 2020, where in just April and May alone, the cumulative death total went from around 5,000 to over 100,000.",
+        highlightStart: new Date("2020-04-01"),
+        highlightEnd: new Date("2020-06-01"),
+        color: "#e74c3c",
+        annotations: [
+            {
+                type: d3.annotationCalloutElbow,
+                note: {
+                    title: "Initial Wave",
+                    label: "2,000+ daily deaths in April 2020",
+                    wrap: 150
+                },
+                x: null,
+                y: null,
+                dy: -140,
+                dx: 30,
+                targetDate: new Date("2020-04-21")
+            }
+        ]
+    },
+    {
+        title: "Slide 2: The Height of the Pandemic (December 2020 - February 2021)",
+        subtitle: "The Winter 2020/2021 season is commonly referred to as the height of the COVID-19 pandemic, as it is where the number of daily deaths peaked. The cumulative death total increased by around 240,000 in just three months.",
+        highlightStart: new Date("2020-12-01"),
+        highlightEnd: new Date("2021-03-01"),
+        color: "#e67e22",
+        annotations: [
+            {
+                type: d3.annotationCalloutElbow,
+                note: {
+                    title: "Deadliest Surge",
+                    label: "Over 3,000 daily deaths at peak in January 2021",
+                    wrap: 150
+                },
+                x: null,
+                y: null,
+                dy: -30,
+                dx: -30,
+                targetDate: new Date("2021-01-13")
+            }
+        ]
+    },
+    {
+        title: "Slide 3: The Omicron Variant (December 2021 - March 2023)",
+        subtitle: "The Winter 2021/2022 season saw another surge as a result of the Omicron strain of COVID-19. Afterwards, the number of daily deaths from COVID-19 dropped significantly and mostly stayed under 1,000 for about a year until March 2023. At that point, John Hopkins University decided to stop tracking COVID-19 data as the pandemic was no longer an immediate emergency, as well as other reasons.",
+        highlightStart: new Date("2021-12-01"),
+        highlightEnd: new Date("2022-03-01"),
+        color: "#8e44ad",
+        annotations: [
+            {
+                type: d3.annotationCalloutElbow,
+                note: {
+                    title: "Omicron Wave",
+                    label: "~2,500 daily deaths in February 2022",
+                    wrap: 150
+                },
+                x: null,
+                y: null,
+                dy: -10,
+                dx: -40,
+                targetDate: new Date("2022-02-03")
+            },
+            {
+                type: d3.annotationCalloutElbow,
+                note: {
+                    title: "End of Reporting",
+                    label: "John Hopkins University stopped tracking COVID-19 in March 2023",
+                    wrap: 150
+                },
+                x: null,
+                y: null,
+                dy: 50,
+                dx: -10,
+                targetDate: new Date("2023-03-09")
+            }
+        ]
+    }
+];
+
+const svg = d3.select("#chart-container")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+const g = svg.append("g")
+    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+d3.csv("national_deaths.csv").then(function(data) {
+
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    data.forEach(d => {
+        d.date = parseDate(d.date);
+        d.deaths = +d.deaths;
+        d.daily_deaths = +d.daily_deaths;
+    });
+
+    const xScale = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, innerWidth]);
+
+    const yScale = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.deaths)])
+        .range([innerHeight, 0]);
+
+    g.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(xScale).ticks(8).tickFormat(d3.timeFormat("%b %Y")))
+        .selectAll("text")
+        .attr("transform", "rotate(-30)")
+        .style("text-anchor", "end");
+
+    g.append("g")
+        .call(d3.axisLeft(yScale)
+            .tickFormat(d => d3.format(",")(d)));
+
+    g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 55)
+        .attr("text-anchor", "middle")
+        .text("Date");
+
+    g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -65)
+        .attr("text-anchor", "middle")
+        .text("Cumulative Deaths");
+
+    g.append("text")
+        .attr("x", innerWidth)
+        .attr("y", -10)
+        .attr("text-anchor", "end")
+        .style("font-size", "12px")
+        .style("fill", "#888")
+        .style("font-style", "italic")
+        .text("Hover for more details");
+
+    const line = d3.line()
+        .x(d => xScale(d.date))
+        .y(d => yScale(d.deaths));
+
+    g.append("path")
+        .datum(data)
+        .attr("class", "line")
+        .attr("d", line);
+
+    const highlightRect = g.append("rect")
+        .attr("class", "highlight-rect")
+        .attr("y", 0)
+        .attr("height", innerHeight);
+
+    const annotationGroup = g.append("g")
+        .attr("class", "annotation-group");
+
+    const sceneTitle = svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", 25)
+        .attr("text-anchor", "middle")
+        .style("font-size", "16px")
+        .style("font-weight", "bold");
+
+    const tooltip = d3.select("#tooltip");
+
+    const bisect = d3.bisector(d => d.date).left;
+
+    const hoverDot = g.append("circle")
+        .attr("r", 5)
+        .attr("fill", "#2c7bb6")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .style("opacity", 0)
+        .style("pointer-events", "none");
+
+    g.append("rect")
+        .attr("width", innerWidth)
+        .attr("height", innerHeight)
+        .attr("fill", "none")
+        .attr("pointer-events", "all")
+        .on("mousemove", function(event) {
+            const [mx] = d3.pointer(event);
+            const x0 = xScale.invert(mx);
+            const i = bisect(data, x0, 1);
+            const d = data[i];
+            if (!d) return;
+
+            hoverDot
+                .style("opacity", 1)
+                .attr("cx", xScale(d.date))
+                .attr("cy", yScale(d.deaths));
+
+            const tooltipWidth = 200;
+            const xPos = xScale(d.date) + margin.left;
+            const flipped = xPos + tooltipWidth + 12 > width;
+
+            tooltip
+                .style("opacity", 1)
+                .style("left", flipped ? (xPos - tooltipWidth - 12) + "px" : (xPos + 12) + "px")
+                .style("top", (yScale(d.deaths) + margin.top - 20) + "px")
+                .html(`<strong>${d3.timeFormat("%B %d, %Y")(d.date)}</strong><br>
+                    Daily Deaths: ${d3.format(",")(+d.daily_deaths)}<br>
+                    Cumulative Deaths: ${d3.format(",")(d.deaths)}`);
+        })
+        .on("mouseleave", function() {
+            tooltip.style("opacity", 0);
+            hoverDot.style("opacity", 0);
+        });
+
+    function renderScene(sceneNum) {
+        const scene = scenes[sceneNum - 1];
+
+        sceneTitle.text(scene.title);
+        d3.select("#subtitle").text(scene.subtitle);
+
+        const x1 = xScale(scene.highlightStart);
+        const x2 = xScale(scene.highlightEnd);
+        highlightRect
+            .attr("x", x1)
+            .attr("width", x2 - x1)
+            .attr("fill", scene.color);
+
+        annotationGroup.selectAll("*").remove();
+
+        const annotationData = scene.annotations.map(a => {
+            const targetPoint = data.find(d =>
+                d.date.toDateString() === a.targetDate.toDateString()
+            ) || data.reduce((prev, curr) =>
+                Math.abs(curr.date - a.targetDate) < Math.abs(prev.date - a.targetDate) ? curr : prev
+            );
+
+            return {
+                type: a.type,
+                note: a.note,
+                x: xScale(targetPoint.date),
+                y: yScale(targetPoint.deaths),
+                dy: a.dy,
+                dx: a.dx,
+                color: scene.color
+            };
+        });
+
+        const makeAnnotations = d3.annotation()
+            .type(d3.annotationCalloutElbow)
+            .annotations(annotationData);
+
+        annotationGroup.call(makeAnnotations);
+
+        d3.select("#prev-btn").property("disabled", sceneNum === 1);
+        d3.select("#next-btn").property("disabled", sceneNum === totalScenes);
+        d3.select("#scene-counter").text(`Slide ${sceneNum} of ${totalScenes}`);
+    }
+
+    document.getElementById("next-btn").addEventListener("click", function() {
+        if (currentScene < totalScenes) {
+            currentScene++;
+            renderScene(currentScene);
+        }
+    });
+
+    document.getElementById("prev-btn").addEventListener("click", function() {
+        if (currentScene > 1) {
+            currentScene--;
+            renderScene(currentScene);
+        }
+    });
+
+    renderScene(1);
+});
+</script>
+</body>
+</html>
